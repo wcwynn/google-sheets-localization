@@ -23,6 +23,7 @@ module Fastlane
         # get this parameters via command line arguments
         spreadsheet_id = params[:spreadsheet_id]
         spreadsheet_name = params[:sheet_name]
+        key_column_name = params[:key_column_name]
         type = params[:platform] # one of ios|android|json
         root_folder = params[:target_folder]
         file_name = params[:file_name]
@@ -36,6 +37,15 @@ module Fastlane
         languages = headers.select { |key| key.length == 2 }
         unless allowed_languages.nil?
           languages = languages.select { |key| allowed_languages.include? key }
+        end
+
+        key_column_index = 0
+        unless key_column_name.nil?
+          key_column_index = headers.size.times.find {|i| headers[i] == key_column_name}
+          if key_column_index.nil?
+            UI.error("Header column named \"#{key_column_name}\" not found.\nPlease double check the provided parameter matches the key column name in the spreadsheet")
+            return
+          end
         end
 
         #remove header row
@@ -61,8 +71,8 @@ module Fastlane
           UI.message("Generating file for language \"#{language}\"")
 
           rows.each do |row|
-            key = row.first
-            value = row[index + 1]
+            key = row[key_column_index]
+            value = row[key_column_index + index + 1]
 
             description = nil
             if row.count == headers.count
@@ -204,6 +214,12 @@ module Fastlane
                                        description: "Sheet name",
                                        verify_block: proc do |value|
                                           UI.user_error! "No Sheet name given" unless (value and not value.empty?)
+                                       end),
+          FastlaneCore::ConfigItem.new(key: :key_column_name,
+                                       description: "Key column name",
+                                       optional: true,
+                                       verify_block: proc do |value|
+                                          UI.user_error! "Key column name should be passed as string" unless value.kind_of? String
                                        end),
           FastlaneCore::ConfigItem.new(key: :platform,
                                        description: "Platform",

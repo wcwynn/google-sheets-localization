@@ -23,7 +23,7 @@ module Fastlane
         # get this parameters via command line arguments
         spreadsheet_id = params[:spreadsheet_id]
         spreadsheet_name = params[:sheet_name]
-        type = params[:platform] # one of ios|android
+        type = params[:platform] # one of ios|android|json
         root_folder = params[:target_folder]
         file_name = params[:file_name]
         allowed_languages = params[:languages]
@@ -50,7 +50,11 @@ module Fastlane
           file = Dir[file_path].first
 
           if file.nil?
-            UI.error("File with name: \"#{file_name}\" for language \"#{language}\" does not exist! Please create it first!")
+            if type == "json"
+              UI.error("File with name: \"#{file_name}-#{language}.json\" for language \"#{language}\" does not exist! Please create it first!")
+            else
+              UI.error("File with name: \"#{file_name}\" for language \"#{language}\" does not exist! Please create it first!")
+            end
             next
           end
 
@@ -73,6 +77,9 @@ module Fastlane
               file_content += self.build_comment(description, type)
             end
             file_content += self.build_row(key, value, type)
+          end
+          if type == "json"
+            file_content.chomp!(",\n")
           end
           file_content += self.file_suffix(type)
           File.write(file, file_content)
@@ -99,11 +106,19 @@ module Fastlane
         end
 
         def self.build_row(key, value, type)
-          if type == "ios"
+          if type == "json"
+            return self.build_json_row(key, value)
+          elsif type == "ios"
             return self.build_ios_row(key, value)
           else
             return self.build_android_row(key, value)
           end
+        end
+
+        def self.build_json_row(key, value)
+          value.gsub! "\n", "\\n"
+          value.gsub! "\"", "\\\""
+          return "  \"" + key + "\": \"" + value + "\",\n"
         end
 
         def self.build_ios_row(key, value)
@@ -127,7 +142,10 @@ module Fastlane
         end
 
         def self.build_comment(comment, type)
-          if type == "ios"
+          if type == "json"
+            # no comments in json
+            return ""
+          elsif type == "ios"
             return "// #{comment}\n"
           else
             return "    <!-- #{comment} -->\n"
@@ -135,7 +153,9 @@ module Fastlane
         end
 
         def self.get_file_path(root_folder, language, file_name, type, is_default_language)
-          if type == "ios"
+          if type == "json"
+            return "#{root_folder}/**/#{file_name}-#{language}.json"
+          elsif type == "ios"
             return "#{root_folder}/**/#{language}.lproj/#{file_name}.strings"
           else
             language_suffix = is_default_language ? "" : "-#{language}"
@@ -144,7 +164,9 @@ module Fastlane
         end
 
         def self.file_prefix(type)
-          if type == "ios"
+          if type == "json"
+            return "{\n"
+          elsif type == "ios"
             return ""
           else
             return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n"
@@ -152,7 +174,9 @@ module Fastlane
         end
 
         def self.file_suffix(type)
-          if type == "ios"
+          if type == "json"
+            return "\n}"
+          elsif type == "ios"
             return ""
           else
             return "</resources>\n"
@@ -184,7 +208,7 @@ module Fastlane
           FastlaneCore::ConfigItem.new(key: :platform,
                                        description: "Platform",
                                        verify_block: proc do |value|
-                                          UI.user_error! "platform has to be either ios or android" unless ["ios", "android"].include? value
+                                          UI.user_error! "platform has to be either ios, android, or json" unless ["ios", "android", "json"].include? value
                                        end),
           FastlaneCore::ConfigItem.new(key: :target_folder,
                                        description: "Target folder",
@@ -217,7 +241,7 @@ module Fastlane
       end
 
       def self.is_supported?(platform)
-        [:ios, :android].include? platform
+        [:ios, :android, :json].include? platform
       end
     end
   end
